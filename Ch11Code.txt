@@ -1,0 +1,179 @@
+// Chapter 11 - ADO.NET Testing
+
+
+-- ===================================================
+-- Create backend database script: makeDbEmployees.sql
+use master
+go
+
+if exists (select * from sysdatabases where name='dbEmployees')
+ drop database dbEmployees
+go
+
+create database dbEmployees
+go
+
+use dbEmployees
+go
+
+create table tblEmployees
+(
+ empID char(3) primary key,
+ empLast varchar(35) not null,
+ empDOB datetime not null
+)
+go
+
+insert into tblEmployees
+ values('111', 'Adams', '6/15/1981')
+insert into tblEmployees
+ values('222', 'Baker', '6/15/1982')
+insert into tblEmployees
+ values('333', 'Chung', '6/15/1983')
+insert into tblEmployees
+ values('444', 'Donne', '6/15/1984')
+go
+
+-- end script
+
+
+-- ===================================================
+-- Create test case data and results script: makeDbTestData.sql
+use master
+go
+
+if exists (select * from sysdatabases where name='dbTestData')
+ drop database dbTestData
+go
+
+create database dbTestData
+go
+
+use dbTestData
+go
+
+create table tblTestCases
+(
+ caseID char(4) primary key,
+ input varchar(35) not null,
+ expected varchar(250) not null
+)
+go
+
+insert into tblTestCases
+ values('0001', 'Adams', '111Adams6/15/1981 12:00:00 AM')
+insert into tblTestCases
+ values('0002', 'A', '111Adams6/15/1981 12:00:00 AM222Baker6/15/1982 12:00:00 AM')
+insert into tblTestCases
+ values('0003', 'Z', '')
+
+-- end script
+
+
+// Example Program: ADOdotNETtest
+
+using System;
+using System.Data;
+using System.Data.SqlClient;
+
+namespace ADOdotNETtest
+{
+  class Class1
+  {
+    [STAThread]
+    static void Main(string[] args)
+    {
+      try
+      {
+        Console.WriteLine("\nBegin test run\n");
+        Console.WriteLine("\nADO.NET method under test = GetEmployees()");
+        Console.WriteLine("Test case data source = dbTestData..tblTestCases\n");
+
+        string connString = "Server=(local);Database=dbTestData;
+                             Trusted_Connection=Yes";
+        SqlConnection sc = new SqlConnection(connString);
+        string select = "SELECT caseID, input, expected FROM tblTestCases";
+        SqlCommand cmd = new SqlCommand(select, sc);
+        sc.Open();
+        SqlDataReader sdr = cmd.ExecuteReader();
+
+        string caseID, input, expected, actual;
+        DataSet ds;
+      
+        while (sdr.Read() == true) // main test loop
+        {
+          Console.WriteLine("===========================");
+          caseID = sdr.GetString(0);
+          input = sdr.GetString(1);
+          expected = sdr.GetString(2); // aggregate string
+          if (expected == "")
+            expected = null;
+
+          actual = null;
+
+          ds = GetEmployees(input); // call method under test
+
+          // build aggregate string of actual DataSet
+          foreach (DataRow dr in ds.Tables[0].Rows)
+          {
+            foreach (DataColumn dc in ds.Tables[0].Columns)
+            {
+              actual += dr[dc];
+            }
+          }
+
+          Console.WriteLine("Case ID = " + caseID);
+          Console.WriteLine("Input = '" + input + "'");
+          Console.WriteLine("Expected DataSet = ");
+          Console.WriteLine(" " + expected);
+          Console.WriteLine("Actual DataSet   = ");
+          Console.WriteLine(" " + actual);
+           
+          if (actual == expected)
+            Console.WriteLine("Result =  Pass");
+          else
+            Console.WriteLine("Result =  FAIL");
+        }
+        Console.WriteLine("===========================");
+
+        sdr.Close();
+        sc.Close();
+
+        Console.WriteLine("\nDone");
+        Console.ReadLine();
+      }
+      catch(Exception ex)
+      {
+        Console.WriteLine("Fatal error: " + ex.Message);
+        Console.ReadLine();
+      }
+    } // Main()
+
+    private static DataSet GetEmployees(string s) // copy from App under test
+    {
+      try
+      {
+        string connString = "Server=(local);Database=dbEmployees;
+                             Trusted_Connection=Yes";
+        SqlConnection sc = new SqlConnection(connString);
+        string select = "SELECT empID, empLast, empDOB
+                         FROM tblEmployees
+                         WHERE empLast LIKE '%" + s + "%'";
+        SqlCommand cmd = new SqlCommand(select, sc);
+        sc.Open();
+
+        DataSet ds = new DataSet();
+        SqlDataAdapter sda = new SqlDataAdapter(select, sc);
+        sda.Fill(ds);
+        sc.Close();
+        return ds;
+      }
+      catch
+      {
+        return null;
+      }
+    }
+  } // class
+} // ns
+
+

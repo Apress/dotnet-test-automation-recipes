@@ -1,0 +1,112 @@
+// Chapter 5 - Request-Response Testing
+// Example Program: RequestResponseTest 
+
+using System;
+using System.Net; // WebClient
+using System.Text; // Encoding
+using System.IO; // Streams
+using System.Web; // request-response classes
+using System.Web.Util; // HttpUtility.UrlEncode
+
+namespace RequestResponseTest
+{
+  class Class1
+  {
+    [STAThread]
+    static void Main(string[] args)
+    {
+      try
+      {
+        Console.WriteLine("Start test run\n");
+        string uri = "http://localhost/TestAuto/Ch5/WebForm.aspx";
+        FileStream fs = new FileStream("..\\..\\TestCases.txt",
+                                       FileMode.Open);
+        StreamReader sr = new StreamReader(fs);
+        string line;
+        
+        while ((line = sr.ReadLine()) != null)
+        {
+          string[] tokens = line.Split('!');
+          string data = tokens[1];
+          string expected = tokens[2];
+          string vs = ViewState(uri);
+          vs = HttpUtility.UrlEncode(vs);
+          data += "&__VIEWSTATE=" + vs;
+
+          Console.WriteLine("==========");
+          Console.WriteLine("TestCase ID = " + tokens[0]);
+          Console.WriteLine("Sending: " + data);
+          Console.Write("Looking for: '" + expected + "'");
+          Console.WriteLine(" in HTTP response stream");
+          
+          if (ResponseHasTarget(uri, data, expected))
+            Console.WriteLine("Pass");
+          else
+            Console.WriteLine("*FAIL*");
+        }
+      
+        Console.WriteLine("==========");
+        Console.WriteLine("\nEnd test run");
+      }
+      catch(Exception ex)
+      {
+        Console.WriteLine("Fatal error: " + ex.Message);
+      }
+    } // Main()
+
+    private static string ViewState(string uri)
+    {
+      try
+      {
+        WebClient wc = new WebClient();
+        Stream st = wc.OpenRead(uri);
+        StreamReader sr = new StreamReader(st);
+        string res = sr.ReadToEnd();
+        sr.Close();
+        st.Close();
+        int start = res.IndexOf("__VIEWSTATE", 0) + 20;
+        int end = res.IndexOf("\"", start);
+        string vs = res.Substring(start, (end-start));
+        return vs;
+      }
+      catch
+      {
+        throw new Exception("Fatal error finding ViewState");
+      }
+    }
+
+    private static bool ResponseHasTarget(string uri,
+                                          string postData,
+                                          string target)
+    {
+      byte[] buffer = Encoding.ASCII.GetBytes(postData);
+              
+      HttpWebRequest req = (HttpWebRequest)WebRequest.Create(uri);
+      req.Method = "POST";
+      req.ContentType = "application/x-www-form-urlencoded";
+      req.ContentLength = buffer.Length;
+      req.Timeout = 5000;
+                      
+      Stream reqst = req.GetRequestStream();
+      reqst.Write(buffer, 0, buffer.Length);
+
+      reqst.Flush();
+      reqst.Close();
+            
+      HttpWebResponse res = (HttpWebResponse)req.GetResponse();
+      Stream resst = res.GetResponseStream();
+      StreamReader sr = new StreamReader(resst);
+     
+      string result = sr.ReadToEnd();
+      
+      sr.Close();
+      resst.Close();
+
+      if (result.IndexOf(target) >= 0)
+        return true;
+      else
+        return false;
+    }
+
+  } // class
+} // ns

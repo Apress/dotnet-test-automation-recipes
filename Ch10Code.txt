@@ -1,0 +1,283 @@
+// Chapter 10 - Combinations and Permutations
+// Example Program: ComboPerm
+
+
+namespace ComboPerm
+{
+  class Class1
+  {
+    [STAThread]
+    static void Main(string[] args)
+    {
+      try
+      {
+        Console.WriteLine("Combination & Permutation demonstration");
+        string[] shortDeck = new string[] { "As", "Ks", "Qs", "Js",
+              "Ts", "9s", "8s", "7s", "6s", "5s", "4s", "3s", "2s" };
+
+        long ct = Combination.Choose(13,5);
+        Console.WriteLine("\nThere are " + ct + " combinations of 13
+                          cards taken 5 at a time.");
+        Console.WriteLine("\nThey are: ");
+
+        Combination c = new Combination(13,5);
+        string[] hand = new string[5];
+        int i = 0;
+        while (c != null)
+        {
+          hand = c.ApplyTo(shortDeck);
+          Console.WriteLine("[" + i + "] " + hand[0] + " " + hand[1]
+                    + " " + hand[2] + " " + hand[3] + " " + hand[4]);
+          c = c.Successor();
+          ++i;
+        }
+
+        Console.WriteLine("\nJust hand[1286] is: ");
+        c = new Combination(13,5).Element(1286);
+        hand = c.ApplyTo(shortDeck);
+        Console.WriteLine(hand[0] + " " + hand[1] + " " + hand[2] +
+                                    " " + hand[3] + " " + hand[4]);
+
+        Console.WriteLine("\nThere are " + Permutation.Factorial(5) +
+                               " permutations of this 5-card hand.");
+        Console.WriteLine("\nThey are:");
+        Permutation p = new Permutation(5);
+        string[] rearrangement = new string[5];
+        i = 0;
+        while (p != null)
+        {
+          rearrangement = p.ApplyTo(hand);
+          Console.WriteLine("[" + i + "] " + rearrangement[0] + " " +
+                    rearrangement[1] + " " + rearrangement[2] + " " +
+                          rearrangement[3] + " " + rearrangement[4]);
+          p = p.Successor();
+          ++i;
+        }
+
+        Console.WriteLine("\nDone\n");
+        Console.ReadLine();
+      }
+      catch(Exception ex)
+      {
+        Console.WriteLine("Fatal error: " + ex.Message);
+        Console.ReadLine();
+      }
+
+    } // Main()
+  } // Class1
+
+  public class Combination
+  {
+    private long n = 0;
+    private long k = 0;
+    private long[] data = null;
+
+    public Combination(long n, long k)
+    {
+      if (n < 0 || k < 0)
+        throw new Exception("Negative argument in constructor");
+      this.n = n;
+      this.k = k;
+      this.data = new long[k];
+      for (long i = 0; i < k; ++i)
+        this.data[i] = i;
+    }
+
+    public Combination(long n, long k, long[] a)
+    {
+      if (k != a.Length)
+        throw new Exception("Bad array size in constructor");
+      this.n = n;
+      this.k = k;
+      this.data = new long[k];
+      for (long i = 0; i < a.Length; ++i)
+        this.data[i] = a[i];
+    }
+
+    public static long Choose(long n, long k)
+    {
+      if (n < 0 || k < 0)
+        throw new Exception("Negative argument in Choose");
+      if (n < k)
+        return 0;
+      if (n == k)
+        return 1;
+      long delta, iMax;
+
+      if (k < n - k)
+      {
+        delta = n - k;
+        iMax = k;
+      }
+      else
+      {
+        delta = k;
+        iMax = n - k;
+      }
+
+      long answer = delta + 1;
+      for (long i = 2; i <= iMax; ++i)
+      {
+        checked { answer = (answer * (delta + i)) / i; }
+      }
+
+      return answer;
+    }
+
+    public Combination Successor()
+    {
+      if (this.data[0] == this.n - this.k)
+        return null;
+
+      Combination ans = new Combination(this.n, this.k);
+
+      for (long i = 0; i < this.k; ++i)
+        ans.data[i] = this.data[i];
+
+      long x;
+      for (x = this.k - 1; x > 0 &&
+                ans.data[x] == this.n - this.k + x; --x);
+
+      ++ans.data[x];
+
+      for (long j = x; j < this.k - 1; ++j)
+        ans.data[j+1] = ans.data[j] + 1;
+
+      return ans;
+    }
+
+    public Combination Element(long m) 
+    {
+      long[] ans = new long[this.k];
+
+      long a = this.n;
+      long b = this.k;
+      long x = (Choose(this.n, this.k) - 1) - m;
+ 
+      for (long i = 0; i < this.k; ++i) 
+      {
+        ans[i] = LargestV(a,b,x);    
+        x = x - Choose(ans[i],b);
+        a = ans[i];
+        b = b-1;
+      }
+
+      for (long i = 0; i < this.k; ++i)
+      {
+        ans[i] = (n-1) - ans[i];
+      }
+
+      return new Combination(this.n, this.k, ans);
+    } 
+
+    private static long LargestV(long a, long b, long x)
+    {
+      long v = a - 1;
+           
+      while (Choose(v,b) > x)
+        --v;
+
+      return v;
+    }
+
+    public string[] ApplyTo(string[] sa)
+    {
+      if (sa.Length != this.n)
+        throw new Exception("Bad array size in ApplyTo()");
+
+      string[] result = new string[this.k];
+
+      for (long i = 0; i < result.Length; ++i)
+        result[i] = sa[this.data[i]];
+
+      return result;
+    } 
+
+
+  } // class Combination
+
+  public class Permutation
+  {
+    private int[] data = null;  
+    private int order = 0;      
+
+    public Permutation(int n)   
+    {
+      this.data = new int[n];
+      for (int i = 0; i < n; ++i)
+      {
+        this.data[i] = i;
+      }
+
+      this.order = n;
+    }
+
+    public Permutation Successor()
+    {
+      Permutation result = new Permutation(this.order);  
+
+      int left, right;
+      
+      for (int k = 0; k < result.order; ++k)
+      {
+        result.data[k] = this.data[k]; 
+      }
+      
+      left = result.order - 2; 
+      while ((result.data[left] > result.data[left+1]) &&
+                                                (left >= 1))  
+      {
+        --left;
+      }
+      if ((left == 0) && (this.data[left] > this.data[left+1]))
+        return null;  
+
+      right = result.order - 1; 
+      while (result.data[left] > result.data[right]) 
+      {
+        --right;
+      }
+      
+      int temp = result.data[left]; 
+      result.data[left] = result.data[right];
+      result.data[right] = temp;
+      
+      
+      int i = left + 1; 
+      int j = result.order - 1;  
+
+      while (i < j) 
+      {
+        temp = result.data[i];
+        result.data[i++] = result.data[j];
+        result.data[j--] = temp;
+      }
+
+      return result;
+    }
+
+    public static ulong Factorial(int n)
+    {
+      ulong answer = 1;
+      for (int i = 1; i <= n; ++i)
+      {
+        checked { answer *= (ulong)i; }
+      }
+      return answer;
+    }
+
+    public string[] ApplyTo(string[] sa)
+    {
+      if (sa.Length != this.order)
+        throw new Exception("Bad array size in ApplyTo()");
+
+      string[] result = new string[this.order];
+
+      for (long i = 0; i < result.Length; ++i)
+        result[i] = sa[this.data[i]];
+
+      return result;
+    }
+
+  }  // class Permutation 
+} // ns

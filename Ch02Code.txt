@@ -1,0 +1,194 @@
+// Chapter 2 - Reflection-Based UI Testing
+// Example Program: ReflectionUITest
+
+using System;
+using System.Reflection;
+using System.Windows.Forms;
+using System.Threading;
+using System.Drawing;
+
+namespace ReflectionUITest
+{
+  class Class1
+  {
+    static BindingFlags flags = BindingFlags.Public |
+                                BindingFlags.NonPublic |
+                                BindingFlags.Static |
+                                BindingFlags.Instance;
+    static AutoResetEvent are = new AutoResetEvent(false);
+
+    [STAThread]
+    static void Main(string[] args)
+    {
+      try
+      {
+        Console.WriteLine("\nStarting test scenario");
+        Console.WriteLine("\nLaunching Form1");
+        Form theForm = null;
+        string formName = "AUT.Form1";
+        string path = "..\\..\\..\\AUT\\bin\\Debug\\AUT.exe";
+        theForm = LaunchApp(path, formName);
+
+        Console.WriteLine("\nMoving Form1");
+        Point pt = new Point(320, 100);
+        SetFormPropertyValue(theForm, "Location", pt);
+
+        Console.WriteLine("\nSetting textBox1 to 'rock'");
+        SetControlPropertyValue(theForm, "textBox1", "Text", "rock");
+        Console.WriteLine("Setting comboBox1 to 'scissors'");
+        SetControlPropertyValue(theForm, "comboBox1", "Text",
+                                "scissors");
+
+        Console.WriteLine("\nClicking button1");
+        object[] parms = new object[]{ null, EventArgs.Empty };
+        InvokeMethod(theForm, "button1_Click", parms);
+
+        bool pass = true;
+
+        Console.WriteLine("\nChecking listBox1 for 'TextBox wins'");
+        ListBox.ObjectCollection oc =
+           (ListBox.ObjectCollection)
+              GetControlPropertyValue(theForm, "listBox1",
+                                               "Items");
+        string s = oc[0].ToString();
+        if (s.IndexOf("TextBox wins") == -1)
+          pass = false;
+
+        if (pass)
+          Console.WriteLine("\n-- Scenario result = Pass --");
+        else
+          Console.WriteLine("\n-- Scenario result = *FAIL* --");
+
+        Console.WriteLine("\nClicking File->Exit in 3 seconds");
+        Thread.Sleep(3000);
+        InvokeMethod(theForm, "menuItem2_Click", parms);
+
+        Console.WriteLine("\nEnd test scenario");
+      }
+      catch(Exception ex)
+      {
+        Console.WriteLine("Fatal error: " + ex.Message);
+      }
+    } // Main()
+
+    static Form LaunchApp(string path, string formName)
+    {
+      Form result = null;
+      Assembly a = Assembly.LoadFrom(path);
+      Type t = a.GetType(formName);
+      result = (Form)a.CreateInstance(t.FullName);
+      AppState aps = new AppState(result);
+      ThreadStart ts = new ThreadStart(aps.RunApp);
+      Thread thread = new Thread(ts);
+      thread.Start();
+      return result;
+    }
+    private class AppState
+    {
+      public readonly Form formToRun;
+      public AppState(Form f)
+      {
+        this.formToRun = f;
+      }
+      public void RunApp()
+      {
+        Application.Run(formToRun);
+      }
+    } // class AppState
+
+    delegate void SetFormPropertyValueHandler(Form f,
+      string propertyName, object newValue);
+    static void SetFormPropertyValue(Form f, string propertyName,
+      object newValue)
+    {
+      if (f.InvokeRequired)
+      {
+        Delegate d =
+          new SetFormPropertyValueHandler(SetFormPropertyValue);
+        object[] o = new object[] { f, propertyName, newValue };
+        f.Invoke(d, o);
+        are.WaitOne();
+      }
+      else
+      {
+        Type t = f.GetType();
+        PropertyInfo pi = t.GetProperty(propertyName);
+        pi.SetValue(f, newValue, null);
+        are.Set();
+      }
+    }
+
+    delegate void SetControlPropertyValueHandler(Form f,
+      string controlName, string propertyName, object newValue);
+    static void SetControlPropertyValue(Form f, string controlName,
+      string propertyName, object newValue)
+    {
+      if (f.InvokeRequired)
+      {
+        Delegate d =
+          new SetControlPropertyValueHandler(SetControlPropertyValue);
+        object[] o = new object[] { f, controlName, propertyName,
+          newValue };
+        f.Invoke(d, o);
+        are.WaitOne();
+      }
+      else
+      {
+        Type t1 = f.GetType();
+        FieldInfo fi = t1.GetField(controlName, flags);
+        object ctrl = fi.GetValue(f);
+        Type t2 = ctrl.GetType();
+        PropertyInfo pi = t2.GetProperty(propertyName);
+        pi.SetValue(ctrl, newValue, null);
+        are.Set();
+      }
+    }
+
+    delegate void InvokeMethodHandler(Form f, string methodName,
+      params object[] parms);
+    static void InvokeMethod(Form f, string methodName,
+      params object[] parms)
+    {
+      if (f.InvokeRequired)
+      {
+        Delegate d = new InvokeMethodHandler(InvokeMethod);
+        f.Invoke(d, new object[] {f, methodName, parms});
+        are.WaitOne();
+      }
+      else
+      {
+        Type t = f.GetType();
+        MethodInfo mi = t.GetMethod(methodName, flags);
+        mi.Invoke(f, parms);
+        are.Set();
+      }
+    }
+
+    delegate object GetControlPropertyValueHandler(Form f,
+      string controlName, string propertyName);
+    static object GetControlPropertyValue(Form f, string controlName,
+      string propertyName)
+    {
+      if (f.InvokeRequired)
+      {
+        Delegate d =
+          new GetControlPropertyValueHandler(GetControlPropertyValue);
+        object[] o = new object[] { f, controlName, propertyName };
+        object iResult = f.Invoke(d, o);
+        are.WaitOne();
+        return iResult;
+      }
+      else
+      {
+        Type t1 = f.GetType();
+        FieldInfo fi = t1.GetField(controlName, flags);
+        object ctrl = fi.GetValue(f);
+        Type t2 = ctrl.GetType();
+        PropertyInfo pi = t2.GetProperty(propertyName);
+        object gResult = pi.GetValue(ctrl, null);
+        are.Set();
+        return gResult;
+      }
+    }
+  } // Class1
+} // ns

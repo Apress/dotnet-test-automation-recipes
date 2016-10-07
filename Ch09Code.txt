@@ -1,0 +1,225 @@
+-- Chapter 9 - SQL Stored Procedure Testing
+
+
+
+-- ===========================================================
+-- Database setup: makeDbEmployees.sql 
+
+use master
+go
+
+if exists (select * from sysdatabases where name='dbEmployees')
+ drop database dbEmployees
+go
+
+if exists (select * from sysxlogins where name = 'employeesLogin')
+ exec sp_droplogin 'employeesLogin'
+go
+
+create database dbEmployees
+go
+
+use dbEmployees
+go
+
+create table tblEmployees
+(
+ empID char(3) primary key,
+ empLast varchar(35) not null,
+ empDOH datetime not null,
+)
+go
+
+-- this is dev data, not test case data
+insert into tblEmployees values('e11','Adams', '06/15/1998')
+insert into tblEmployees values('e22','Baker', '06/15/2001')
+go
+
+exec sp_addlogin 'employeesLogin', 'secret'
+go
+exec sp_grantdbaccess 'employeesLogin'
+go
+
+create procedure usp_HiredAfter
+ @dt datetime
+as
+ select * from tblEmployees where empDOH > @dt
+go
+
+grant execute on usp_HiredAfter to employeesLogin
+go
+
+-- end script
+
+
+-- ===========================================================
+-- Test case data and results setup: makeDbTestCasesAndResults.sql
+
+use master
+go
+
+if exists (select * from sysdatabases where name='dbTestCasesAndResults')
+ drop database dbTestCasesAndResults
+go
+
+if exists (select * from sysxlogins where name = 'testLogin')
+ exec sp_droplogin 'testLogin'
+go
+
+create database dbTestCasesAndResults
+go
+
+use dbTestCasesAndResults
+go
+
+create table tblTestCases
+(
+ caseID char(4) primary key,
+ input datetime not null,
+ expectedChecksum int not null
+)
+go
+
+-- this is the test case data for usp_HiredAfter using a checksum expected
+-- value approach
+-- can also read from a text file using BCP, DTS, or a C# program
+insert into tblTestCases values('0001','01/01/1998', 1042032)
+insert into tblTestCases values('0002','01/01/1998', 9999999) -- deliberate error
+insert into tblTestCases values('0003','01/01/2000', 25527856)
+insert into tblTestCases values('0004','01/01/2006', 0)
+go
+
+create table tblResults
+(
+ caseID char(4) not null,
+ result char(4) null,
+ whenRun datetime not null
+)
+go
+
+exec sp_addlogin 'testLogin', 'secret'
+go
+exec sp_grantdbaccess 'testLogin'
+go
+
+grant select, insert, delete, update on tblTestCases to testLogin
+go
+
+grant select, insert, delete, update on tblResults to testLogin
+go
+
+-- end script
+
+-- ===========================================================
+-- Test automation harness: SQLspTest.sql
+-- test dbEmployees..usp_HiredAfter
+-- reads test case data and writes results
+--  to dbTestCasesAndResults
+
+set nocount on
+
+if not exists
+ (select * from master.dbo.sysdatabases where name='dbTestCasesAndResults')
+ raiserror('Fatal error: dbTestCasesAndResults not found', 16, 1)
+go
+
+if exists (select * from sysobjects where name='tap_Reset')
+ drop procedure tap_Reset
+go
+
+create procedure tap_Reset
+as
+ truncate table dbEmployees.dbo.tblEmployees
+
+insert into dbEmployees.dbo.tblEmployees
+ values('e11','Adams', '06/15/1998')
+insert into dbEmployees.dbo.tblEmployees
+ values('e22','Baker', '06/15/2001')
+insert into dbEmployees.dbo.tblEmployees
+ values('e33','Young', '06/15/1998')
+insert into dbEmployees.dbo.tblEmployees
+ values('e44','Zetta', '06/15/2001')
+-- other data would be inserted too
+go
+
+-- prepare dbEmployees with rich data
+exec tap_Reset
+go
+
+declare tCursor cursor fast_forward
+ for select caseID, input, expectedChecksum
+ from dbTestCasesAndResults.dbo.tblTestCases
+ order by caseID
+
+declare @caseID char(4), @input datetime, @expectedChecksum int
+declare @whenRun datetime
+declare @resultMsg varchar(80)
+declare @actualChecksum int
+
+create table #resultRowset -- for checksum technique
+(
+ empID char(3) primary key,
+ empLast varchar(35) not null,
+ empDOH datetime not null,
+)
+
+set @whenRun = getdate()
+
+print 'Stored procedure under test = usp_HiredAfter'
+print ' '
+print 'CaseID  Input           Expected Actual  Result'
+print '==============================================='
+
+open tCursor
+fetch next 
+ from tCursor
+ into @caseID, @input, @expectedChecksum
+
+while @@fetch_status = 0
+begin
+
+ exec tap_Reset -- reset test bed data
+
+ truncate table #resultRowset -- empty out the result rowset
+
+ insert #resultRowset (empID, empLast, empDOH) -- call sp under test
+  exec dbEmployees.dbo.usp_HiredAfter @input
+
+ if (@@rowcount = 0)
+  set @actualChecksum = 0
+ else
+  select @actualChecksum = checksum_agg(binary_checksum(*)) from #resultRowset
+ 
+ if (@actualChecksum = @expectedChecksum)
+  begin
+   set @resultMsg = @caseID + '    ' + cast(@input as varchar(11)) + 
+     ' ' + cast(@expectedChecksum as varchar(20)) + ' ' +
+           cast(@actualChecksum as varchar(20)) + ' Pass'
+   print @resultMsg
+   insert into dbTestCasesAndResults.dbo.tblResults values(@caseID, 'Pass',
+                                                           @whenRun)
+  end
+ else
+  begin
+   set @resultMsg = @caseID + '    ' + cast(@input as varchar(11)) + 
+     ' ' + cast(@expectedChecksum as varchar(20)) + ' ' +
+           cast(@actualChecksum as varchar(20)) + ' FAIL'
+   print @resultMsg
+   insert into dbTestCasesAndResults.dbo.tblResults values(@caseID, 'FAIL',
+                                                           @whenRun)
+  end
+
+ fetch next
+  from tCursor
+  into @caseID, @input, @expectedChecksum
+ 
+end
+
+close tCursor
+deallocate tCursor
+
+drop table #resultRowset
+
+-- end script
+
+

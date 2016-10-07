@@ -1,0 +1,112 @@
+// Chapter 12 - XML Testing
+// Example Program: XmlTest
+
+using System;
+using System.IO;
+using System.Xml;
+using System.Xml.Schema; // validation
+using System.Xml.Serialization; // deserialization
+
+namespace XmlTest
+{
+  class Class1
+  {
+    [STAThread]
+    static void Main(string[] args)
+    {
+      try
+      {
+        Console.WriteLine("\nBegin XML techniques demonstration\n");
+
+        Console.WriteLine("Original file is: \n");
+        FileStream fs = new FileStream("..\\..\\TestCases.xml",
+                                       FileMode.Open);
+        StreamReader sr = new StreamReader(fs);
+        string line;
+        while((line = sr.ReadLine()) != null)
+        {
+          Console.WriteLine(line);
+        }
+        sr.Close(); fs.Close();
+
+        Console.WriteLine("\nValidating original file using
+                          rules in TestCases.xsd");
+        XmlSchemaCollection xsc = new XmlSchemaCollection();
+        xsc.ValidationEventHandler +=
+         new ValidationEventHandler(ValidationCallBack);
+        xsc.Add(null, "..\\..\\testCases.xsd");
+        XmlTextReader xtr = new XmlTextReader("..\\..\\testCases.xml");
+        XmlValidatingReader xvr = new XmlValidatingReader(xtr);
+        xvr.ValidationType = ValidationType.Schema;
+        xvr.Schemas.Add(xsc);
+        xvr.ValidationEventHandler +=
+         new ValidationEventHandler(ValidationCallBack);
+        while (xvr.Read()); // note empty loop
+
+        Console.WriteLine("XML test case file is valid");
+
+        Console.WriteLine("\nParsing original file into memory
+                          using Deserialization()");
+        XmlSerializer xs =
+          new XmlSerializer(typeof(SerializerLib.Suite));
+        sr = new StreamReader("..\\..\\TestCases.xml");
+        SerializerLib.Suite suite =
+         (SerializerLib.Suite)xs.Deserialize(sr);
+        sr.Close();
+        Console.WriteLine("Parsed data = \n");
+        suite.Display();
+
+        Console.WriteLine("\nDone");
+        Console.ReadLine();
+      }
+      catch(Exception ex)
+      {
+        Console.WriteLine("Fatal error: " + ex.Message);
+        Console.ReadLine();
+      }
+            
+        } // Main()
+
+    private static void ValidationCallBack(object sender, ValidationEventArgs ea) 
+    {
+      Console.WriteLine("Validation error: " + ea.Message);
+      Console.ReadLine();
+    }
+    } // class
+
+  namespace SerializerLib
+  {
+    [XmlRootAttribute("suite")]
+    public class Suite 
+    {
+      [XmlElementAttribute("testcase")]
+      public TestCase[] items; // changed name from xsd-generated code
+      public void Display() // added to xsd-generated code
+      {
+        foreach (TestCase tc in items)
+        {
+          Console.Write(tc.id + " " + tc.bvt + " "  + tc.inputs.arg1 + " ");
+          Console.WriteLine(tc.inputs.arg2 + " " + tc.expected);
+        }
+      }
+    }
+
+    public class TestCase  // changed name from xsd-generated code
+    {
+      [XmlAttributeAttribute()]
+      public string id;
+      [XmlAttributeAttribute()]
+      public string bvt;
+      [XmlElementAttribute("inputs")]
+      public Inputs inputs; // change from xsd-generated code: no array
+      public string expected;
+    }
+
+    public class Inputs // changed name from xsd-generated code
+    {
+      public string arg1;
+      public string arg2;
+    }
+  } // ns SerializerLib
+
+} // ns

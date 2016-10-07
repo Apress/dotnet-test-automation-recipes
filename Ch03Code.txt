@@ -1,0 +1,224 @@
+// Chapter 3 - Windows-Based UI Testing
+// Example Program: WindowsUITest
+
+using System;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Threading;
+
+namespace WindowsUITest
+{
+  class Class1
+  {
+    [STAThread]
+    static void Main(string[] args)
+    {
+      try
+      {
+        Console.WriteLine("\nLaunching application under test");
+
+        string path = "..\\..\\..\\WinApp\\bin\\Debug\\WinApp.exe";
+        Process p = Process.Start(path);
+
+        Console.WriteLine("\nFinding main window handle");
+        IntPtr mwh = FindMainWindowHandle("Form1", 100, 25);
+        Console.WriteLine("Main window handle = " + mwh);
+
+        Console.WriteLine("\nFinding handles to textBox1, comboBox1");
+        Console.WriteLine(" button1, listBox1");
+
+        // you may want to add delays here to make sure Form has rendered
+        IntPtr tb = FindWindowEx(mwh, IntPtr.Zero, null, "<enter color>");
+        IntPtr cb = FindWindowByIndex(mwh, 1);
+        IntPtr butt = FindWindowEx(mwh, IntPtr.Zero, null, "button1");
+        IntPtr lb = FindWindowByIndex(mwh, 3);
+
+        if (tb == IntPtr.Zero || cb == IntPtr.Zero ||
+            butt == IntPtr.Zero || lb == IntPtr.Zero)
+          throw new Exception("Unable to find all controls");
+        else
+          Console.WriteLine("All control handles found");
+
+        Console.WriteLine("\nClicking button1");
+        ClickOn(butt);
+
+        Console.WriteLine("Clicking away Error message box");
+        Thread.Sleep(1000);
+        IntPtr mb = FindMessageBox("Error");
+        if (mb == IntPtr.Zero)
+          throw new Exception("Unable to find message box");
+        IntPtr okButt = FindWindowEx(mb, IntPtr.Zero, null, "OK");
+        if (okButt == IntPtr.Zero)
+          throw new Exception("Unable to find OK button");
+        ClickOn(okButt);
+
+        Console.WriteLine("Typing 'red' and 'blue' to application");
+        SendChars(tb, "red");
+        ClickOn(cb);
+        SendChars(cb, "blue");
+
+        Console.WriteLine("Clicking on button1");
+        ClickOn(butt);
+        Console.WriteLine("\nChecking listBox1 for 'purple'");
+
+        uint LB_FINDSTRING = 0x018F;
+        int result = SendMessage4(lb, LB_FINDSTRING, -1,
+                                  "Result is purple");
+        if (result >= 0)
+          Console.WriteLine("\nTest scenario result = Pass");
+        else
+          Console.WriteLine("\nTest scenario result = *FAIL*");
+
+        Console.WriteLine("\nExiting app in 3 seconds . . . ");
+        Thread.Sleep(3000);
+        IntPtr hMainMenu = GetMenu(mwh);
+        IntPtr hFile = GetSubMenu(hMainMenu, 0);
+        int iExit = GetMenuItemID(hFile, 0);
+        uint WM_COMMAND = 0x0111;
+        SendMessage2(mwh, WM_COMMAND, iExit, IntPtr.Zero);
+  
+        Console.WriteLine("\nDone");
+        Console.ReadLine();
+      }
+      catch(Exception ex)
+      {
+        Console.WriteLine("Fatal error: " + ex.Message);
+      }
+    } // Main()
+
+    static IntPtr FindTopLevelWindow(string caption, int delay,
+                                       int maxTries)
+    {
+      IntPtr mwh = IntPtr.Zero;
+      bool formFound = false;
+      int attempts = 0;
+
+      do 
+      {
+        mwh = FindWindow(null, caption);
+        if (mwh == IntPtr.Zero)
+        {
+          Console.WriteLine("Form not yet found");
+          Thread.Sleep(delay);
+          ++attempts;
+        }
+        else
+        {
+          Console.WriteLine("Form has been found");
+          formFound = true;
+        }
+      } while (!formFound && attempts < maxTries);
+
+      if (mwh != IntPtr.Zero)
+        return mwh;
+      else
+        throw new Exception("Could not find Main Window");
+    } // FindTopLevelWindow()
+
+    static IntPtr FindMainWindowHandle(string caption, int delay, int maxTries)
+    {
+      return FindTopLevelWindow(caption, delay, maxTries);
+    }
+
+    static IntPtr FindMessageBox(string caption)
+    {
+      int delay = 100;
+      int maxTries = 25;
+      return FindTopLevelWindow(caption, delay, maxTries);
+    }
+
+    static IntPtr FindWindowByIndex(IntPtr hwndParent, int index)
+    {
+      if (index == 0)
+        return hwndParent;
+      else
+      {
+        int ct = 0;
+        IntPtr result = IntPtr.Zero;
+        do
+        {
+          result = FindWindowEx(hwndParent, result, null, null); 
+          if (result != IntPtr.Zero)
+            ++ct;
+        } while (ct < index && result != IntPtr.Zero);
+
+        return result;
+      }
+    } // FindWindowByIndex()
+
+    static void ClickOn(IntPtr hControl)
+    {
+      uint WM_LBUTTONDOWN = 0x0201;
+      uint WM_LBUTTONUP   = 0x0202;
+      PostMessage1(hControl, WM_LBUTTONDOWN, 0, 0);
+      PostMessage1(hControl, WM_LBUTTONUP, 0, 0);
+    }
+
+    static void SendChar(IntPtr hControl, char c)
+    {
+      uint WM_CHAR = 0x0102;
+      SendMessage1(hControl, WM_CHAR, c, 0);
+    }
+
+    static void SendChars(IntPtr hControl, string s)
+    {
+      foreach (char c in s)
+      {
+        SendChar(hControl, c);
+      }
+    }
+
+    // P/Invoke Aliases
+
+    [DllImport("user32.dll", EntryPoint="FindWindow",
+      CharSet=CharSet.Auto)]
+    static extern IntPtr FindWindow(string lpClassName,
+      string lpWindowName);
+
+    [DllImport("user32.dll", EntryPoint="FindWindowEx",
+      CharSet=CharSet.Auto)]
+    static extern IntPtr FindWindowEx(IntPtr hwndParent,
+      IntPtr hwndChildAfter, string lpszClass, string lpszWindow);
+
+    // for WM_CHAR message
+    [DllImport("user32.dll", EntryPoint="SendMessage",
+      CharSet=CharSet.Auto)]
+    static extern void SendMessage1(IntPtr hWnd, uint Msg,
+      int wParam, int lParam);
+
+    // for WM_COMMAND message
+    [DllImport("user32.dll", EntryPoint="SendMessage",
+      CharSet=CharSet.Auto)]
+    static extern void SendMessage2(IntPtr hWnd, uint Msg,
+      int wParam, IntPtr lParam);
+
+    // for WM_LBUTTONDOWN and WM_LBUTTONUP messages
+    [DllImport("user32.dll", EntryPoint="PostMessage",
+      CharSet=CharSet.Auto)] 
+    static extern bool PostMessage1(IntPtr hWnd, uint Msg,
+      int wParam, int lParam);
+
+    // for WM_GETTEXT message
+    [DllImport("user32.dll", EntryPoint="SendMessage",
+      CharSet=CharSet.Auto)]
+    static extern int SendMessage3(IntPtr hWndControl, uint Msg,
+      int wParam, byte[] lParam);
+
+    // for LB_FINDSTRING message
+    [DllImport("user32.dll", EntryPoint="SendMessage",
+      CharSet=CharSet.Auto)] 
+    static extern int SendMessage4(IntPtr hWnd, uint Msg,
+      int wParam, string lParam);
+ 
+    // Menu routines
+    [DllImport("user32.dll")] // 
+    static extern IntPtr GetMenu(IntPtr hWnd);
+
+    [DllImport("user32.dll")] // 
+    static extern IntPtr GetSubMenu(IntPtr hMenu, int nPos);
+
+    [DllImport("user32.dll")] // 
+    static extern int GetMenuItemID(IntPtr hMenu, int nPos);
+
+  } // class
+} // ns

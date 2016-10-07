@@ -1,0 +1,145 @@
+// Chapter 4 - Test Harness Design Patterns
+// Example Program: PokerLibTest
+
+using System;
+using System.Collections;
+using System.Data.SqlClient;
+using System.Xml;
+using PokerLib;
+
+namespace PokerLibTest
+{
+  class Class1
+  {
+    [STAThread]
+    static void Main(string[] args)
+    {
+      try
+      {
+        Console.WriteLine("\nBegin PokerLibTest run\n");
+        
+        SqlConnection isc = new SqlConnection("Server=(local);
+          Database=dbTestPoker;Trusted_Connection=yes");
+        isc.Open();
+        SqlCommand scSelect = new SqlCommand("SELECT * FROM tblTestCases",
+                                             isc);
+        SqlDataReader sdr = scSelect.ExecuteReader();
+
+        string caseid, input, expected = "", actual;
+        TestCase tc = null;
+        TestCaseResult r = null;
+        
+        // 1. read all test case data from SQL into memory
+        ArrayList tcd = new ArrayList();
+        while (sdr.Read())
+        {
+          caseid = sdr.GetString(0);
+          input = sdr.GetString(1);
+          expected = sdr.GetString(2);
+          tc = new TestCase(caseid, input, expected);
+          tcd.Add(tc);
+        }
+        isc.Close();
+
+        // 2. run all tests, store results to memory
+        ArrayList tcr = new ArrayList();
+        for (int i = 0; i < tcd.Count; ++i)
+        {
+          tc = (TestCase)tcd[i];
+          string[] cards = tc.input.Split(' ');
+          Hand h = new Hand(cards[0], cards[1], cards[2],
+                            cards[3], cards[4]);
+          actual = h.GetHandType().ToString();
+          string runat = DateTime.Now.ToString("s");
+        
+          if (actual == tc.expected)
+            r = new TestCaseResult(tc.id, tc.input, tc.expected,
+                                   actual, "Pass", runat);
+          else
+            r = new TestCaseResult(tc.id, tc.input, tc.expected,
+                                   actual, "FAIL", runat);
+          tcr.Add(r);
+        }
+
+        // 3. emit all results to external XML storage
+        XmlTextWriter xtw = new XmlTextWriter("PokerLibResults.xml",
+          System.Text.Encoding.UTF8);
+        xtw.Formatting = Formatting.Indented;
+        xtw.WriteStartDocument();
+        xtw.WriteStartElement("TestResults"); // root node
+
+        for (int i = 0; i < tcr.Count; ++i)
+        {
+          r = (TestCaseResult)tcr[i];
+          xtw.WriteStartElement("case");
+
+          xtw.WriteStartAttribute("id", null);
+          xtw.WriteString(r.id); xtw.WriteEndAttribute();
+
+          xtw.WriteStartAttribute("runat", null);
+          xtw.WriteString(r.runat); xtw.WriteEndAttribute();
+
+          xtw.WriteStartElement("input");
+          xtw.WriteString(r.input); xtw.WriteEndElement();
+
+          xtw.WriteStartElement("expected");
+          xtw.WriteString(r.expected); xtw.WriteEndElement();
+
+          xtw.WriteStartElement("actual");
+          xtw.WriteString(r.actual); xtw.WriteEndElement();
+
+          xtw.WriteStartElement("result");
+          xtw.WriteString(r.result); xtw.WriteEndElement();
+          
+          xtw.WriteEndElement(); // </case>
+        }
+        xtw.WriteEndElement(); // </TestResults>
+        xtw.Close();
+
+        Console.WriteLine("\nDone");
+        Console.ReadLine();
+      }
+      catch(Exception ex)
+      {
+        Console.WriteLine("Fatal error: " + ex.Message);
+        Console.ReadLine();
+      }
+    } // Main()
+
+    class TestCase
+    {
+      public string id;
+      public string input;
+      public string expected;
+
+      public TestCase(string id, string input, string expected)
+      {
+        this.id = id;
+        this.input = input;
+        this.expected = expected;
+      }
+    } // class TestCase
+
+    class TestCaseResult
+    {
+      public string id;
+      public string input;
+      public string expected;
+      public string actual;
+      public string result;
+      public string runat;
+
+      public TestCaseResult(string id, string input, string expected,
+        string actual, string result, string runat)
+      {
+        this.id = id;
+        this.input = input;
+        this.expected = expected;
+        this.actual = actual;
+        this.result = result;
+        this.runat = runat;
+      }
+    } // class TestCaseResult
+
+  } // Class1
+} // ns

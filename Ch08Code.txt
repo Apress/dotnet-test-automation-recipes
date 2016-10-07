@@ -1,0 +1,131 @@
+// Chapter 8 - Web Services Testing
+// Example Program: WebServiceTest
+
+using System;
+using System.Collections;
+using System.Data;
+using System.Net.Sockets;
+using System.Text;
+
+namespace RunTests
+{
+  class Class1
+  {
+    static ArrayList testcases = new ArrayList();
+
+    [STAThread]
+    static void Main(string[] args)
+    {
+      try
+      {
+        Console.WriteLine("\nBegin BookSearch Web service test run\n");
+
+        testcases.Add("001:GetTitles:testing:3:Theory");
+        testcases.Add("002:GetTitles:and:1:Theory"); // error
+        testcases.Add("003:GetTitles:better:1:Build");
+        // other test cases go here
+
+        foreach (string testcase in testcases)
+        {
+          string[] tokens = testcase.Split(':');
+          string id = tokens[0];
+          string method = tokens[1];
+          string input = tokens[2];
+          int expectedCount = int.Parse(tokens[3]);
+          string hint = tokens[4];
+
+          Console.WriteLine("========================");
+          Console.WriteLine("Case ID = " + id);
+          Console.WriteLine("Sending input = '" + input + "' to Web
+                            method GetTitles()");
+
+          Console.WriteLine("\nTesting using proxy mechanism . . . ");
+          BookReference.BookSearch bs = new BookReference.BookSearch();
+          DataSet ds = bs.GetTitles(input);
+          Console.WriteLine("Expected count = " + expectedCount);
+          
+          bool proxyPass;
+          if (ds.Tables["Table"].Rows.Count == expectedCount &&
+ ds.Tables["Table"].Rows[0]["booktitle"].ToString().IndexOf(hint) >= 0)
+            proxyPass = true;
+          else
+            proxyPass = false;
+          Console.WriteLine("Pass via proxy = " + proxyPass);
+
+          Console.WriteLine("\nTesing using TCP mechanism . . . ");
+          TcpClient client = new TcpClient(AddressFamily.InterNetwork);
+          client.Connect("127.0.0.1", 80);
+      
+          string soapMessage = "<?xml version=\"1.0\" encoding=\"utf-8\"?>";
+          soapMessage +=
+ "<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"";
+          soapMessage += " xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\"";
+          soapMessage += 
+ "xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">";
+          soapMessage += "<soap:Body>";
+          soapMessage += "<GetTitles xmlns=\"http://tempuri.org/\">";
+          soapMessage += "<filter>" + input + "</filter>";
+          soapMessage += "</GetTitles>";
+          soapMessage += "</soap:Body>";
+          soapMessage += "</soap:Envelope>";
+          // Console.WriteLine("SOAP message is " + soapMessage);
+
+          string webService = "/TestAuto/Ch8/TheWebService/BookSearch.asmx";
+          string host = "localhost";
+          string webMethod = "GetTitles";
+
+          string header = "POST " + webService + " HTTP/1.1\r\n";
+          header += "Host: " + host + "\r\n";
+          header += "Content-Type: text/xml; charset=utf-8\r\n";
+          header += "Content-Length: " + soapMessage.Length.ToString() + "\r\n";
+          header += "Connection: close\r\n";
+          header += "SOAPAction: \"http://tempuri.org/" + webMethod + "\"\r\n\r\n";
+          //Console.Write("Header is: \n" + header);
+
+          string requestAsString = header + soapMessage;
+          byte[] requestAsBytes = Encoding.ASCII.GetBytes(requestAsString);
+
+          NetworkStream ns = client.GetStream();
+          ns.Write(requestAsBytes, 0, requestAsBytes.Length);
+
+          byte[] responseBufferAsBytes = new byte[512];
+          string responseAsString = "";
+          string entireResponse = "";
+          int numBytesReceived = 0;
+
+          while ((numBytesReceived = ns.Read(responseBufferAsBytes, 0, 512)) > 0)
+          {
+            responseAsString = Encoding.ASCII.GetString(responseBufferAsBytes, 0,
+                                                        numBytesReceived);
+            entireResponse += responseAsString;
+          }
+
+          //Console.WriteLine(entireResponse);
+          Console.WriteLine("Seeking '" + hint + "'");
+          bool tcpPass;
+          if (entireResponse.IndexOf(hint) >= 0)
+            tcpPass = true;
+          else
+            tcpPass = false;
+          Console.WriteLine("Pass via TCP = " + tcpPass);
+
+          if (proxyPass == true && tcpPass == true)
+            Console.WriteLine("\nPass");
+          else
+            Console.WriteLine("\n** FAIL or INCONSISTENT **"); 
+
+        } // main test loop
+
+        Console.WriteLine("========================");
+        Console.WriteLine("\nDone");
+        Console.ReadLine();
+      }
+      catch(Exception ex)
+      {
+        Console.WriteLine("Fatal error: " + ex.Message);
+        Console.ReadLine();
+      }
+
+    } // Main()
+  } // Class1
+} // ns

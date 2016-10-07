@@ -1,0 +1,129 @@
+// Chapter 7 - Low-Level Web UI Testing
+// Example Program: LowLevelUITest
+
+
+using System;
+using SHDocVw; // COM component = Microsoft Internet Controls. IE object
+using mshtml;  // .NET component = Microsoft.mshtml. HTML interfaces
+using System.Diagnostics; // Process
+using System.Threading;   // Sleep()
+
+namespace RunTest
+{
+  class Class1
+  {
+    static AutoResetEvent documentComplete = new AutoResetEvent(false);
+
+    [STAThread]
+    static void Main(string[] args)
+    {
+      try
+      {
+        Console.WriteLine("\nStarting test run");
+
+        bool pass = true; // assume test run will pass
+        SHDocVw.InternetExplorer ie = null;
+
+        Console.WriteLine("\nLaunching an instance of IE");
+        Process p = Process.Start("iexplore.exe", "about:blank");
+        if (p == null)
+          throw new Exception("Could not launch IE");
+        Console.WriteLine("Process handle = " + p.MainWindowHandle.ToString());
+
+        SHDocVw.ShellWindows allBrowsers = new SHDocVw.ShellWindows();
+        Console.WriteLine("Number active browsers = " + allBrowsers.Count);
+
+        if (allBrowsers.Count == 0)
+          throw new Exception("Cannot find IE");
+
+        Console.WriteLine("Attaching to IE");
+        int i = 0;
+        while (i < allBrowsers.Count && ie == null)
+        {
+          InternetExplorer e = (InternetExplorer)allBrowsers.Item(i);
+          if (e.HWND == (int)p.MainWindowHandle)
+            ie = e;
+          ++i;
+        }
+
+        if (ie == null)
+          throw new Exception("Failed to attach to IE");
+
+        ie.DocumentComplete += new
+ DWebBrowserEvents2_DocumentCompleteEventHandler(ie_DocumentComplete);
+
+        Console.WriteLine("\nNavigating to the Web app");
+        object nil = new object();
+        ie.Navigate("http://localhost/TestAuto/Ch7/WebForm1.aspx",
+                    ref nil, ref nil, ref nil, ref nil);
+
+        documentComplete.WaitOne();
+
+        Console.WriteLine("Setting IE to size 450x360");
+        ie.Width = 450;
+        ie.Height = 360;
+        Thread.Sleep(1000);
+
+        HTMLDocument theDoc = (HTMLDocument)ie.Document;
+
+        Console.WriteLine("\nSelecting 'ID' radio button");
+        HTMLInputElement radioButton = 
+ (HTMLInputElement)theDoc.getElementById("RadioButtonList1_1");
+        radioButton.@checked = true;
+
+        Console.WriteLine("Setting text box to '2B'");
+        HTMLInputElement textBox =
+ (HTMLInputElement)theDoc.getElementById("TextBox1");
+        textBox.value = "2B";
+
+        Console.WriteLine("Clicking search button");
+        HTMLInputElement butt =
+ (HTMLInputElement)theDoc.getElementById("Button1");
+        butt.click();
+
+        documentComplete.WaitOne();
+
+        // non-HTML element
+        Console.WriteLine("Seeking 'Search Complete' in body");
+        HTMLBody body =
+ (HTMLBody)theDoc.getElementsByTagName("body").item(0, null);
+        if (body.createTextRange().findText("Search Complete", 0, 4)
+             == true)
+        {
+          Console.WriteLine("Found target string");
+        }
+        else
+        {
+          Console.WriteLine("*Target string not found*");
+          pass = false;
+        }
+
+        if (pass)
+          Console.WriteLine("\nTest result = Pass\n");
+        else
+          Console.WriteLine("\nTest result = *FAIL*\n");
+
+        Console.WriteLine("Closing IE in 4 seconds . . . ");
+        Thread.Sleep(4000);
+        ie.Quit();
+
+      Finish:
+            
+        Console.WriteLine("\nEnd test run");
+        Console.ReadLine();
+      }
+      catch(Exception ex)
+      {
+        Console.WriteLine("Fatal error: " + ex.Message);
+        Console.ReadLine();
+      }
+
+    } // Main()
+
+    private static void ie_DocumentComplete(object pDisp, ref object URL)
+    {
+      documentComplete.Set();
+    }
+
+  } // class Class1
+} // ns RunTest

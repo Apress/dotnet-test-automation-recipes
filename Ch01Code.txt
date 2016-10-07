@@ -1,0 +1,119 @@
+// Chapter 1 - API Testing
+// Example Program: ApiTest
+
+using System;
+using System.IO;
+using MathLib; // houses methods under test
+
+namespace TestAutomation
+{
+  class Class1
+  {
+    [STAThread]
+    static void Main(string[] args)
+    {
+      try
+      {
+        FileStream ifs = new FileStream("..\\..\\TestCases.txt",
+                                        FileMode.Open);
+        StreamReader sr = new StreamReader(ifs);
+        string stamp = DateTime.Now.ToString("s");
+        stamp = stamp.Replace(":", "-");
+        FileStream ofs = new FileStream("..\\..\\TestResults" +
+                         stamp + ".txt", FileMode.CreateNew);
+        StreamWriter sw = new StreamWriter(ofs);
+
+        string line, caseID, method;
+        string[] tokens, tempInput;
+        string expected;
+        double actual = 0.0;
+        int numPass = 0, numFail = 0;
+
+        Console.WriteLine("\nCaseID Result Method   Details");
+        Console.WriteLine("================================\n");
+
+        while ((line = sr.ReadLine()) != null)
+        {
+          tokens = line.Split(':');
+          caseID = tokens[0];
+          method = tokens[1];
+          tempInput = tokens[2].Split(' ');
+          expected = tokens[3];
+
+          int[] input = new int[tempInput.Length];
+          for (int i = 0; i < input.Length; ++i)
+            input[i] = int.Parse(tempInput[i]);
+
+          if (method == "ArithmeticMean")
+          {
+            actual = MathLib.Methods.ArithmeticMean(input);
+            if (actual.ToString("F4") == expected)
+            {
+              Console.WriteLine(caseID + "   Pass   " + method +
+                       " actual = " + actual.ToString("F4"));
+              sw.WriteLine(caseID + "   Pass   " + method +
+                       " actual = " + actual.ToString("F4"));
+              ++numPass;
+            }
+            else
+            {
+              Console.WriteLine(caseID + "  *FAIL*  " + method +
+                       " actual = " + actual.ToString("F4") +
+                       " expected = " + expected);
+              sw.WriteLine(caseID + "  *FAIL*  " + method +
+                       " actual = " + actual.ToString("F4") +
+                       " expected = " + expected);
+              ++numFail;
+            }
+          }
+          else if (method == "GeometricMean ")
+          {
+            MathLib.Methods m = new MathLib.Methods();
+            actual = m.GeometricMean(input);
+            if (actual.ToString("F4") == expected)
+            {
+              Console.WriteLine(caseID + "   Pass   " + method +
+                       " actual = " + actual.ToString("F4"));
+              sw.WriteLine(caseID + "   Pass   " + method +
+                       " actual = " + actual.ToString("F4"));
+              ++numPass;
+            }
+            else
+            {
+              Console.WriteLine(caseID + "  *FAIL*  " + method +
+                       " actual = " + actual.ToString("F4") +
+                       " expected = " + expected);
+              sw.WriteLine(caseID + "  *FAIL*  " + method +
+                       " actual = " + actual.ToString("F4") +
+                       " expected = " + expected);
+              ++numFail;
+            }
+          }
+          else
+          {
+            Console.WriteLine(caseID + "          " + method +
+                     " Not yet implemented");
+            sw.WriteLine(caseID + "          " + method +
+                     " Not yet implemented");
+          }
+        } // test case loop
+
+        Console.WriteLine("\n========= end test run ==========");
+        Console.WriteLine("\nPass = " + numPass +
+                          " Fail = " + numFail);
+        sw.WriteLine(Environment.NewLine + "Pass = " + numPass +
+                          " Fail = " + numFail);
+
+        sr.Close();
+        ifs.Close();
+        sw.Close();
+        ofs.Close();
+      }
+      catch(Exception ex)
+      {
+        Console.WriteLine("Fatal error: " + ex.Message);
+      }
+      Console.ReadLine();
+    } // Main()
+  } // class Class1
+} // ns TestAutomation

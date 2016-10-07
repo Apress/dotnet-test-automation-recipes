@@ -1,0 +1,230 @@
+// Chapter 6 - Script-Based UI Testing
+
+// ===================================
+// Application under test: WebApp.aspx
+
+<%@ Page Language="C#" Debug="true" %>
+
+<script language="c#" runat="server">
+  private void Button1_Click(object sender, System.EventArgs e)
+  {
+    int alpha = int.Parse(TextBox1.Text.Trim());
+    int  beta = int.Parse(TextBox2.Text.Trim());
+    
+    if (RadioButton1.Checked)
+    {
+      TextBox3.Text = Sum(alpha, beta).ToString("F4");
+    }
+    else if (RadioButton2.Checked)
+    {
+      TextBox3.Text = Diff(alpha, beta).ToString("F4");
+    }
+    else if (RadioButton3.Checked)
+    {
+      TextBox3.Text = Product(alpha, beta).ToString("F4");
+    }
+    else
+     TextBox3.Text = "Select method";
+    }
+
+    private static double Sum(int a, int b)
+    {
+      double ans = 0.0;
+      ans = a + b;
+      return ans;
+    }
+
+    private static double Diff(int a, int b)
+    {
+      double ans = 0.0;
+      ans = a - b;
+      return ans;
+    }
+
+    private static double Product(int a, int b)
+    {
+      double ans = 0.0;
+      ans = a * b;
+      return ans;
+    }
+</script>
+
+<html>
+  <head><title>WebApp.aspx</title></head>
+  <style type="text/css">
+   fieldset { width: 16em }
+   body { font-size: 10pt; font-family: Arial }
+  </style>
+  <body bgColor="#ccffff">
+    <h3>MiniCalc</h3>
+    <form method="post" name="theForm" id="theForm" runat="server"> 
+      <p><asp:Label id="Label1" runat="server">Enter integer:&nbsp&nbsp
+        </asp:Label>
+      <asp:TextBox id="TextBox1" size="6" runat="server" /></p>
+      <p><asp:Label id="Label2" runat="server">Enter another:&nbsp
+        </asp:Label>
+      <asp:TextBox id="TextBox2" size="6" runat="server" /></p>
+      <p></p>
+
+      <fieldset>
+       <legend>Operation</legend>
+       <p><asp:RadioButton id="RadioButton1" GroupName="ops"
+         runat="server"/>Addition</p>
+       <p><asp:RadioButton id="RadioButton2" GroupName="ops"
+         runat="server"/>Subtraction</p>
+       <p><asp:RadioButton id="RadioButton3" GroupName="ops"
+         runat="server"/>Multipication</p>
+       <p><asp:RadioButton id="RadioButton4" GroupName="ops"
+         runat="server"/>Division</p>
+       <p></p>
+      </fieldset>
+      
+      <p><asp:Button id="Button1" runat="server" text=" Calculate "
+        onclick="Button1_Click" /> </p>
+      
+      <p><asp:TextBox id="TextBox3" size="10" runat="server" />
+    </form>
+  </body>
+</html>
+
+
+// ===================================
+// Test harness holder: WebAuto.html
+
+<html>
+  <head>
+    <script language="JavaScript">
+      var description = "Demo Test Scenario";
+      var whenRun = new Date();
+      var loadCount = 0;
+      var pass = true;
+    </script>
+  </head>
+
+  <frameset cols="40%,*">
+    <frame src="TestCode.html" name="leftFrame">
+    <frame src="../TheWebApp/WebApp.aspx" name="rightFrame"
+      onload="leftFrame.updateState();">
+  </frameset>
+</html>
+
+
+// ===================================
+// Test harness code: TestCode.html
+
+<html>
+  <head>
+    <script language="JavaScript">
+      function updateState()
+      {
+        parent.loadCount++;
+          if (parent.loadCount > 1)
+            runTest();
+      } // updateState()
+
+      function runTest()
+      {
+      try {
+        if (parent.loadCount == 1)
+        {
+          logRemark("Setting TextBoxes to '7' and '5'");
+          logRemark("Selecting RadioButton1");
+          logRemark("Clicking Calculate button");
+          parent.rightFrame.document.theForm.TextBox1.value = "7";
+          parent.rightFrame.document.theForm.TextBox2.value = "5";
+          parent.rightFrame.document.all["RadioButton1"].checked = true;
+          parent.rightFrame.document.theForm.Button1.click();
+        }
+        else if (parent.loadCount == 2)
+        {
+          logRemark("Verifying '12.0000'");
+          verify("TextBox3", "12.0000");
+          logRemark("Selecting RadioButton2");
+          logRemark("Clicking Calculate button");
+          parent.rightFrame.document.all["RadioButton2"].checked = true;
+          parent.rightFrame.document.theForm.Button1.click();
+        }
+        else if (parent.loadCount == 3)
+        {
+          logRemark("Verifying '2.0000'");
+          verify("TextBox3", "2.0000");
+          logRemark("Selecting RadioButton3");
+          logRemark("Clicking Calculate button");
+          parent.rightFrame.document.all["RadioButton3"].checked = true;
+          parent.rightFrame.document.theForm.Button1.click();
+        }
+        else if (parent.loadCount == 4)
+        {
+          logRemark("Verifying '35.0000'");
+          verify("TextBox3", "35.0000");
+          logRemark("Determining pass / fail"); 
+          if (parent.pass == true)
+            theForm.result.value = " Pass ";
+          else
+            theForm.result.value = " *FAIL* ";
+          logRemark("Saving result to 'results.txt'");
+          saveResults();
+          logRemark("Run at " + parent.whenRun);
+        }
+      } 
+      catch(e) {
+        logRemark("Unexpected fatal error: " + e);
+      }
+    } // runTest()
+
+    function logRemark(comment)
+    {
+      var currComment = document.all["comments"].value;
+      var newComment = currComment + "\n" + comment;
+      document.all["comments"].value = newComment;
+    } // logRemark()
+
+    function verify(ctrl, val)
+    {
+      if (parent.rightFrame.document.all[ctrl].value != val)
+        parent.pass = false;
+    }
+
+    function saveResults()
+    {
+      var fso = new ActiveXObject("Scripting.FileSystemObject");
+      var f = fso.CreateTextFile("C:\\results.txt", true, false);
+      f.WriteLine("Description = " + parent.description);
+      if (parent.pass == true)
+        f.WriteLine("Result = Pass");
+      else
+        f.WriteLine("Result = FAIL");
+      f.Close();
+      // document.all["sender"].click();
+      //document.all["theForm"].submit();
+    } // saveResults() 
+
+    </script>
+  </head>
+  <body bgColor="#aaff99">
+    <h3 style="font-size: 14; font-family: Verdana">UI Test Script
+    </h3>
+    <p><input type="button" value="Run UI Test" onclick="runTest();">
+    </p>
+    <p>Actions:</p><p><textarea id="comments" rows="15" cols="34">
+    </textarea></p>
+    
+    <form name="theForm" method="Post" action="..\\SaveResults.asp"> 
+      <p>Test Result = <input type="text" name="result" size="12"></p>
+      <p><input type="submit" name="sender" value="Save Results"></p>
+    </form>
+    <p>
+  </body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
